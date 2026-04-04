@@ -2,213 +2,299 @@
 <html lang="hi">
 <head>
     <meta charset="UTF-8">
-    <title>Meesho Tracker - Safe & Secure</title>
+    <title>Meesho Tracker - Bank Settlement Update</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #f4f6f9; padding: 20px; margin: 0; }
-        .container { max-width: 1200px; margin: auto; background: white; padding: 25px; border-radius: 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); }
-        h2 { color: #811e68; text-align: center; margin-bottom: 20px; border-bottom: 2px solid #811e68; padding-bottom: 10px; }
-        .upload-section { display: flex; justify-content: center; margin-bottom: 20px; background: #fff5fd; padding: 25px; border-radius: 10px; border: 1px solid #eecce6; }
-        .btn-group { text-align: center; margin-bottom: 20px; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
-        button { padding: 10px 20px; cursor: pointer; border-radius: 6px; border: none; font-weight: bold; transition: 0.3s; color: white; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; padding: 20px; margin: 0; }
+        .container { max-width: 1450px; margin: auto; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        h2, h3 { color: #811e68; text-align: center; border-bottom: 2px solid #811e68; padding-bottom: 10px; margin-top: 30px; }
+        
+        .top-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+        .box { background: #fff5fd; padding: 20px; border-radius: 10px; border: 1px solid #eecce6; }
+        
+        .btn-group { text-align: center; margin-bottom: 25px; display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+        button { padding: 12px 24px; cursor: pointer; border-radius: 8px; border: none; font-weight: bold; transition: 0.3s; color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         .export-btn { background: #2ecc71; }
         .backup-btn { background: #3498db; }
         .restore-btn { background: #9b59b6; }
         .clear-btn { background: #ff4757; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; }
-        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; font-size: 14px; }
-        th { background: #811e68; color: white; position: sticky; top: 0; }
-        .total-row { background: #2d3436; color: white; font-weight: bold; font-size: 16px; }
-        .input-charge { width: 100px; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-weight: bold; }
+        .del-btn { background: #e67e22; display: none; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; border-radius: 8px; overflow: hidden; }
+        th, td { border: 1px solid #eee; padding: 12px; text-align: left; font-size: 13px; }
+        th { background: #811e68; color: white; cursor: pointer; position: sticky; top: 0; }
+        th:hover { background: #6a1855; }
+        tr:nth-child(even) { background: #fafafa; }
+        
+        .total-row-sku { background: #2d3436; color: white; font-weight: bold; font-size: 14px; }
+        .input-small { width: 80px; padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
+        .input-notes { width: 100%; min-width: 150px; padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
+        
         .profit { color: #27ae60; font-weight: bold; }
         .loss { color: #e74c3c; font-weight: bold; }
+
+        #skuListConfig { max-height: 200px; overflow-y: auto; }
+        .sku-config-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px solid #eee; }
+        .checkbox-col { text-align: center; width: 40px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>Meesho Business Tracker (Secure Backup)</h2>
+    <h2>Meesho Business Tracker (Pro Analytics)</h2>
 
-    <div class="upload-section">
-        <div style="text-align: center;">
-            <strong>Step 1: Upload Orders CSV</strong><br><br>
+    <div class="top-grid">
+        <div class="box">
+            <strong>Step 1: Data Upload</strong><br><br>
             <input type="file" id="orderFile" accept=".csv, .xlsx">
+        </div>
+        <div class="box">
+            <strong>Step 2: SKU Packing Costs (Per Unit)</strong>
+            <div id="skuListConfig">Upload file to see SKUs...</div>
         </div>
     </div>
 
     <div class="btn-group">
-        <button class="export-btn" onclick="exportToExcel()">Excel Download</button>
+        <button class="export-btn" onclick="exportToExcel()">Download Excel</button>
         <button class="backup-btn" onclick="backupData()">Save Backup to HDD</button>
         <button class="restore-btn" onclick="document.getElementById('restoreInput').click()">Restore from HDD</button>
         <input type="file" id="restoreInput" style="display:none" accept=".json" onchange="restoreData(this)">
+        <button id="multiDeleteBtn" class="del-btn" onclick="deleteSelectedOrders()">Delete Selected Orders</button>
         <button class="clear-btn" onclick="clearAllData()">Format/Clear All</button>
     </div>
 
-    <table id="masterTable">
-        <thead>
-            <tr>
-                <th>S.No.</th>
-                <th>Sub Order No</th>
-                <th>Order Date</th>
-                <th>SKU</th>
-                <th>Supplier Disc. Price</th>
-                <th>Return Charge (Manual)</th>
-                <th>Net Amount</th>
-            </tr>
-        </thead>
-        <tbody id="tableBody"></tbody>
-        <tfoot>
-            <tr class="total-row" id="totalRow"></tr>
-        </tfoot>
-    </table>
+    <h3>SKU Performance Analytics</h3>
+    <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th>SKU Name</th>
+                    <th>Total Orders</th>
+                    <th>Total Sales (Gross)</th>
+                    <th>Return Amount</th>
+                    <th>Total Packing</th>
+                    <th>Actual Net Profit</th>
+                </tr>
+            </thead>
+            <tbody id="skuBody"></tbody>
+            <tfoot id="skuFooter"></tfoot>
+        </table>
+    </div>
+
+    <h3>Detailed Order Log</h3>
+    <div style="overflow-x: auto; max-height: 500px;">
+        <table>
+            <thead>
+                <tr>
+                    <th class="checkbox-col"><input type="checkbox" id="selectAll" onclick="toggleAllCheckboxes(this)"></th>
+                    <th>S.No.</th>
+                    <th>Date</th>
+                    <th>Sub Order ID</th>
+                    <th>SKU</th>
+                    <th>Order Price</th>
+                    <th>Return Charge (Fine)</th>
+                    <th>Bank Settlement</th>
+                    <th>My Notes</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
 </div>
 
 <script>
     let masterData = JSON.parse(localStorage.getItem('meeshoData')) || {};
-    window.onload = renderTable;
+    let packingCosts = JSON.parse(localStorage.getItem('packingCosts')) || {};
 
-    document.getElementById('orderFile').addEventListener('change', (e) => processFile(e.target.files[0]));
+    window.onload = renderAll;
 
-    function excelDateToJSDate(serial) {
-        if(!serial || isNaN(serial)) return serial;
-        let date = new Date(Math.round((serial - 25569) * 86400 * 1000));
-        return date.toLocaleDateString('en-GB');
-    }
-
-    function processFile(file) {
+    document.getElementById('orderFile').addEventListener('change', (e) => {
         const reader = new FileReader();
-        reader.onload = function(e) {
-            const data = new Uint8Array(e.target.result);
+        reader.onload = function(event) {
+            const data = new Uint8Array(event.target.result);
             const workbook = XLSX.read(data, {type: 'array'});
             const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
             
             json.forEach(row => {
                 let keys = Object.keys(row);
-                let oidKey = keys.find(k => k.toLowerCase().includes('sub order no') || k.toLowerCase().includes('sub-order id') || k.toLowerCase().includes('order id'));
-                let priceKey = keys.find(k => k.toLowerCase().includes('supplier discounted price'));
-                let dateKey = keys.find(k => k.toLowerCase().includes('order date'));
-                let skuKey = keys.find(k => k.toLowerCase().includes('sku'));
+                let oid = row[keys.find(k => k.toLowerCase().includes('sub order no') || k.toLowerCase().includes('order id'))];
+                let price = parseFloat(row[keys.find(k => k.toLowerCase().includes('supplier discounted price'))] || 0);
+                let sku = row[keys.find(k => k.toLowerCase().includes('sku'))] || 'Unknown';
+                let date = row[keys.find(k => k.toLowerCase().includes('order date'))];
 
-                let oid = row[oidKey];
-                if (!oid) return;
-
-                if (!masterData[oid]) {
-                    masterData[oid] = { id: oid, date: '-', sku: '-', price: 0, charge: 0 };
+                if (oid && !masterData[oid]) {
+                    masterData[oid] = { id: oid, date: date, sku: sku, price: price, charge: 0, notes: '' };
                 }
-
-                let rawDate = row[dateKey] || '-';
-                masterData[oid].date = (typeof rawDate === 'number') ? excelDateToJSDate(rawDate) : rawDate;
-                masterData[oid].sku = row[skuKey] || '-';
-                masterData[oid].price = parseFloat(row[priceKey] || 0);
             });
             saveAndRefresh();
         };
-        reader.readAsArrayBuffer(file);
-    }
-
-    function updateCharge(id, val) {
-        masterData[id].charge = parseFloat(val || 0);
-        saveAndRefresh();
-    }
+        reader.readAsArrayBuffer(e.target.files[0]);
+    });
 
     function saveAndRefresh() {
         localStorage.setItem('meeshoData', JSON.stringify(masterData));
-        renderTable();
+        renderAll();
     }
 
-    function renderTable() {
+    function renderAll() {
+        renderOrderTable();
+        renderSKUAnalytics();
+        renderPackingConfig();
+        toggleDeleteButton();
+    }
+
+    function renderOrderTable() {
         const tbody = document.getElementById('tableBody');
         tbody.innerHTML = '';
         let count = 1;
-        let grandTotalNet = 0;
         let entries = Object.values(masterData).reverse();
 
         entries.forEach(item => {
-            let net = item.price - item.charge;
-            grandTotalNet += net;
-
             const tr = document.createElement('tr');
-            let amountClass = net > 0 ? 'profit' : (net < 0 ? 'loss' : '');
+            let settlement = item.price - item.charge;
+            let settlementClass = settlement >= 0 ? 'profit' : 'loss';
 
             tr.innerHTML = `
+                <td class="checkbox-col"><input type="checkbox" class="order-checkbox" value="${item.id}" onclick="handleRowCheck()"></td>
                 <td>${count++}</td>
+                <td>${item.date || '-'}</td>
                 <td>${item.id}</td>
-                <td>${item.date}</td>
-                <td>${item.sku}</td>
+                <td><strong>${item.sku}</strong></td>
                 <td>₹${item.price.toFixed(2)}</td>
-                <td><input type="number" class="input-charge" value="${item.charge}" onchange="updateCharge('${item.id}', this.value)"></td>
-                <td class="${amountClass}">₹${net.toFixed(2)}</td>
+                <td><input type="number" class="input-small" value="${item.charge}" onchange="updateField('${item.id}', 'charge', this.value)"></td>
+                <td class="${settlementClass}">₹${settlement.toFixed(2)}</td>
+                <td><input type="text" class="input-notes" value="${item.notes || ''}" onchange="updateField('${item.id}', 'notes', this.value)"></td>
             `;
             tbody.appendChild(tr);
         });
-
-        const totalRow = document.getElementById('totalRow');
-        totalRow.innerHTML = `
-            <td colspan="4">GRAND TOTAL (${entries.length} Items)</td>
-            <td style="text-align:right">Total Profit/Loss:</td>
-            <td colspan="2" style="color: ${grandTotalNet >= 0 ? '#2ecc71' : '#ff4757'}">₹${grandTotalNet.toFixed(2)}</td>
-        `;
     }
 
-    // --- NEW BACKUP FUNCTIONS ---
+    function renderSKUAnalytics() {
+        const skuData = {};
+        let grandOrders = 0, grandSales = 0, grandReturns = 0, grandPacking = 0, grandNet = 0;
+
+        Object.values(masterData).forEach(item => {
+            if (!skuData[item.sku]) skuData[item.sku] = { count: 0, gross: 0, returns: 0, packing: 0, net: 0 };
+            let pCost = packingCosts[item.sku] || 0;
+            let net = item.price - item.charge - pCost;
+            
+            skuData[item.sku].count++;
+            skuData[item.sku].gross += item.price;
+            skuData[item.sku].returns += item.charge;
+            skuData[item.sku].packing += pCost;
+            skuData[item.sku].net += net;
+        });
+
+        const tbody = document.getElementById('skuBody');
+        tbody.innerHTML = '';
+        Object.keys(skuData).forEach(sku => {
+            let d = skuData[sku];
+            grandOrders += d.count;
+            grandSales += d.gross;
+            grandReturns += d.returns;
+            grandPacking += d.packing;
+            grandNet += d.net;
+
+            tbody.innerHTML += `
+                <tr>
+                    <td><strong>${sku}</strong></td>
+                    <td>${d.count}</td>
+                    <td>₹${d.gross.toFixed(2)}</td>
+                    <td class="loss">₹${d.returns.toFixed(2)}</td>
+                    <td>₹${d.packing.toFixed(2)}</td>
+                    <td class="${d.net >= 0 ? 'profit' : 'loss'}">₹${d.net.toFixed(2)}</td>
+                </tr>`;
+        });
+
+        const footer = document.getElementById('skuFooter');
+        footer.innerHTML = `
+            <tr class="total-row-sku">
+                <td>GRAND TOTAL</td>
+                <td>${grandOrders}</td>
+                <td>₹${grandSales.toFixed(2)}</td>
+                <td>₹${grandReturns.toFixed(2)}</td>
+                <td>₹${grandPacking.toFixed(2)}</td>
+                <td>₹${grandNet.toFixed(2)}</td>
+            </tr>`;
+    }
+
+    function renderPackingConfig() {
+        const skus = [...new Set(Object.values(masterData).map(i => i.sku))];
+        const container = document.getElementById('skuListConfig');
+        if(!skus.length) return;
+        container.innerHTML = '';
+        skus.forEach(sku => {
+            const div = document.createElement('div');
+            div.className = 'sku-config-item';
+            div.innerHTML = `<span>${sku}</span><input type="number" class="input-small" value="${packingCosts[sku] || 0}" onchange="updatePackingCost('${sku}', this.value)">`;
+            container.appendChild(div);
+        });
+    }
+
+    function updateField(id, field, val) {
+        masterData[id][field] = field === 'notes' ? val : parseFloat(val || 0);
+        saveAndRefresh();
+    }
+
+    function updatePackingCost(sku, val) {
+        packingCosts[sku] = parseFloat(val || 0);
+        localStorage.setItem('packingCosts', JSON.stringify(packingCosts));
+        renderAll();
+    }
+
     function backupData() {
-        if (Object.keys(masterData).length === 0) {
-            alert("Backup lene ke liye koi data hi nahi hai!");
-            return;
-        }
-        const dataStr = JSON.stringify(masterData);
-        const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-        
-        const exportFileDefaultName = 'Meesho_Backup_' + new Date().toLocaleDateString().replace(/\//g, '-') + '.json';
-        
-        const linkElement = document.createElement('a');
-        linkElement.setAttribute('href', dataUri);
-        linkElement.setAttribute('download', exportFileDefaultName);
-        linkElement.click();
+        const backupObj = { masterData, packingCosts, date: new Date().toISOString() };
+        const blob = new Blob([JSON.stringify(backupObj, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `Meesho_Backup_${new Date().toLocaleDateString().replace(/\//g, '-')}.json`;
+        link.click();
     }
 
     function restoreData(input) {
-        const file = input.files[0];
-        if (!file) return;
-
         const reader = new FileReader();
         reader.onload = function(e) {
-            try {
-                const restored = JSON.parse(e.target.result);
-                if (confirm("Purana data restore karein? Isse abhi wala data badal jayega.")) {
-                    masterData = restored;
-                    saveAndRefresh();
-                    alert("Data Restore Successful!");
-                }
-            } catch (err) {
-                alert("Galat file select kari hai!");
+            const restored = JSON.parse(e.target.result);
+            if(restored.masterData) {
+                masterData = restored.masterData;
+                packingCosts = restored.packingCosts || {};
+                saveAndRefresh();
+                alert("Restore Success!");
             }
         };
-        reader.readAsText(file);
+        reader.readAsText(input.files[0]);
     }
 
-    function clearAllData() {
-        if(confirm("Confirm: Kya aap saara data delete karna chahte hain? Pehle backup le lein!")) {
-            localStorage.removeItem('meeshoData');
-            masterData = {};
-            renderTable();
+    function toggleAllCheckboxes(source) {
+        document.querySelectorAll('.order-checkbox').forEach(cb => cb.checked = source.checked);
+        toggleDeleteButton();
+    }
+
+    function handleRowCheck() { toggleDeleteButton(); }
+
+    function toggleDeleteButton() {
+        const count = document.querySelectorAll('.order-checkbox:checked').length;
+        document.getElementById('multiDeleteBtn').style.display = count > 0 ? 'inline-block' : 'none';
+    }
+
+    function deleteSelectedOrders() {
+        if(confirm("Delete selected?")) {
+            document.querySelectorAll('.order-checkbox:checked').forEach(cb => delete masterData[cb.value]);
+            saveAndRefresh();
         }
     }
 
+    function clearAllData() { if(confirm("Format All?")) { localStorage.clear(); location.reload(); } }
+
     function exportToExcel() {
-        const wsData = Object.values(masterData).map((item, index) => ({
-            "S.No": index + 1,
-            "Sub Order No": item.id,
-            "Date": item.date,
-            "SKU": item.sku,
-            "Supplier Price": item.price,
-            "Return Charge": item.charge,
-            "Net": item.price - item.charge
+        const wsData = Object.values(masterData).map(item => ({
+            "Date": item.date, "ID": item.id, "SKU": item.sku, "Price": item.price, "Fine": item.charge, "Settlement": item.price - item.charge, "Notes": item.notes
         }));
         const ws = XLSX.utils.json_to_sheet(wsData);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Report");
-        XLSX.writeFile(wb, "Meesho_Business_Report.xlsx");
+        XLSX.writeFile(wb, "Meesho_Data.xlsx");
     }
 </script>
 
