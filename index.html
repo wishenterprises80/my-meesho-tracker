@@ -2,7 +2,7 @@
 <html lang="hi">
 <head>
     <meta charset="UTF-8">
-    <title>Meesho Tracker - Simplified Analytics</title>
+    <title>Meesho Tracker - Smart Backup</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <style>
@@ -39,7 +39,7 @@
 <body>
 
 <div class="container">
-    <h2>Meesho Business Tracker (Simplified Analytics)</h2>
+    <h2>Meesho Business Tracker (Pro Analytics)</h2>
 
     <div class="highlight-grid">
         <div class="h-box top-state">TOP STATE: <span id="highState">-</span></div>
@@ -284,7 +284,6 @@
         let topState = Object.keys(states).reduce((a, b) => states[a] > states[b] ? a : b, "-");
         document.getElementById('highState').innerText = topState + " (" + (states[topState] || 0) + ")";
 
-        // State Chart
         if (stateChartObj) stateChartObj.destroy();
         stateChartObj = new Chart(document.getElementById('stateChart'), {
             type: 'bar',
@@ -295,27 +294,19 @@
             options: { responsive: true, plugins: { legend: { display: false } } }
         });
 
-        // SKU Chart (Now Horizontal Bar Chart for better visibility)
         if (skuChartObj) skuChartObj.destroy();
         let sortedSKUEntries = Object.entries(skus).sort((a,b) => b[1] - a[1]);
         skuChartObj = new Chart(document.getElementById('skuChart'), {
             type: 'bar',
             data: {
                 labels: sortedSKUEntries.map(e => e[0]),
-                datasets: [{ 
-                    label: 'Orders', 
-                    data: sortedSKUEntries.map(e => e[1]), 
-                    backgroundColor: '#9b59b6' 
-                }]
+                datasets: [{ label: 'Orders', data: sortedSKUEntries.map(e => e[1]), backgroundColor: '#9b59b6' }]
             },
             options: { 
-                indexAxis: 'y', // Makes it horizontal
+                indexAxis: 'y', 
                 responsive: true, 
                 plugins: { legend: { display: false } },
-                scales: {
-                    x: { beginAtZero: true, grid: { display: false } },
-                    y: { grid: { display: false } }
-                }
+                scales: { x: { beginAtZero: true }, y: { ticks: { autoSkip: false } } }
             }
         });
     }
@@ -357,10 +348,19 @@
     }
 
     function backupData() {
+        // Current Date formatting (DD-MM-YYYY)
+        const now = new Date();
+        const day = String(now.getDate()).padStart(2, '0');
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const year = now.getFullYear();
+        const formattedDate = `${day}-${month}-${year}`;
+
         const blob = new Blob([JSON.stringify({masterData, packingCosts})], { type: "application/json" });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = `Meesho_Backup.json`;
+        
+        // Dynamic file name
+        link.download = `MeeshoBackup${formattedDate}.json`;
         link.click();
     }
 
