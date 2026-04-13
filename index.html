@@ -2,32 +2,49 @@
 <html lang="hi">
 <head>
     <meta charset="UTF-8">
-    <title>Meesho Tracker - Sorting Fixed</title>
+    <title>Meesho Tracker - Simplified Analytics</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; padding: 20px; margin: 0; }
         .container { max-width: 1500px; margin: auto; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
         h2, h3 { color: #811e68; text-align: center; border-bottom: 2px solid #811e68; padding-bottom: 10px; margin-top: 30px; }
-        .top-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+        .top-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
         .box { background: #fff5fd; padding: 15px; border-radius: 10px; border: 1px solid #eecce6; }
+        .highlight-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+        .h-box { padding: 20px; border-radius: 10px; text-align: center; color: white; font-weight: bold; }
+        .top-state { background: #3498db; }
+        .top-sku { background: #9b59b6; }
         .btn-group { text-align: center; margin-bottom: 25px; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
         button { padding: 10px 20px; cursor: pointer; border-radius: 8px; border: none; font-weight: bold; color: white; transition: 0.3s; }
         .export-btn { background: #2ecc71; } .backup-btn { background: #3498db; } .clear-btn { background: #ff4757; }
+        .chart-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
+        canvas { background: #fff; padding: 10px; border-radius: 10px; border: 1px solid #eee; max-height: 500px; }
         table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; border-radius: 8px; overflow: hidden; }
         th, td { border: 1px solid #eee; padding: 12px; text-align: left; font-size: 13px; }
         th { background: #811e68; color: white; cursor: pointer; position: sticky; top: 0; user-select: none; }
-        th:hover { background: #6a1855; }
         tr:nth-child(even) { background: #fafafa; }
-        .paid-tag { background: #27ae60; color: white; padding: 3px 10px; border-radius: 4px; font-weight: bold; font-size: 11px; }
-        .pending-tag { background: #f39c12; color: white; padding: 3px 10px; border-radius: 4px; font-weight: bold; font-size: 11px; }
+        
+        .status-tag { padding: 4px 10px; border-radius: 4px; font-weight: bold; font-size: 11px; color: white; }
+        .st-delivered { background: #000000; }
+        .st-shipped { background: #27ae60; }
+        .st-cancelled { background: #e74c3c; }
+        .st-default { background: #95a5a6; }
+
         .profit { color: #27ae60; font-weight: bold; } .loss { color: #e74c3c; font-weight: bold; }
         .total-row-sku { background: #2d3436; color: white; font-weight: bold; }
+        .order-log-footer { background: #f1f2f6; font-weight: bold; border-top: 2px solid #811e68; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>Meesho Business Tracker (Sorting Pro)</h2>
+    <h2>Meesho Business Tracker (Simplified Analytics)</h2>
+
+    <div class="highlight-grid">
+        <div class="h-box top-state">TOP STATE: <span id="highState">-</span></div>
+        <div class="h-box top-sku">TOP SKU: <span id="highSKU">-</span></div>
+    </div>
 
     <div class="top-grid">
         <div class="box">
@@ -37,10 +54,6 @@
         <div class="box">
             <strong>Step 2: SKU Packing Cost</strong>
             <div id="skuListConfig" style="max-height: 100px; overflow-y: auto; margin-top:10px; font-size: 12px;">Waiting...</div>
-        </div>
-        <div class="box" style="background: #e8f8f5; border-color: #2ecc71;">
-            <strong>Step 3: Upload Payment File</strong><br><br>
-            <input type="file" id="paymentFile" accept=".csv, .xlsx">
         </div>
     </div>
 
@@ -53,13 +66,18 @@
         <button class="clear-btn" onclick="clearAllData()">Format/Clear All</button>
     </div>
 
+    <div class="chart-container">
+        <div><h3>Orders by State</h3><canvas id="stateChart"></canvas></div>
+        <div><h3>Top Selling SKUs</h3><canvas id="skuChart"></canvas></div>
+    </div>
+
     <h3>SKU Performance Analytics</h3>
     <table>
         <thead>
             <tr>
                 <th onclick="sortSKU('sku')">SKU Name ↕️</th>
                 <th onclick="sortSKU('count')">Orders ↕️</th>
-                <th onclick="sortSKU('gross')">Settlement (B+C+G+H) ↕️</th>
+                <th onclick="sortSKU('gross')">Settlement ↕️</th>
                 <th onclick="sortSKU('returns')">Manual Fine ↕️</th>
                 <th onclick="sortSKU('packing')">Packing ↕️</th>
                 <th onclick="sortSKU('net')">Net Profit ↕️</th>
@@ -78,14 +96,15 @@
                     <th onclick="sortOrders('date')">Date ↕️</th>
                     <th onclick="sortOrders('id')">Sub Order ID ↕️</th>
                     <th>SKU</th>
+                    <th>Customer State</th>
                     <th>Settlement Amt</th>
                     <th>Manual Fine</th>
-                    <th>Actual Bank Amt</th>
-                    <th>Status</th>
+                    <th>Reason for Credit Entry</th>
                     <th>Notes</th>
                 </tr>
             </thead>
             <tbody id="tableBody"></tbody>
+            <tfoot id="orderTableFooter"></tfoot>
         </table>
     </div>
 </div>
@@ -93,8 +112,10 @@
 <script>
     let masterData = JSON.parse(localStorage.getItem('meeshoData')) || {};
     let packingCosts = JSON.parse(localStorage.getItem('packingCosts')) || {};
-    let skuSortConfig = { key: 'net', asc: false };
+    let skuSortConfig = { key: 'count', asc: false };
     let orderSortConfig = { key: 'date', asc: false };
+    let stateChartObj = null;
+    let skuChartObj = null;
 
     window.onload = renderAll;
 
@@ -106,12 +127,11 @@
     }
 
     function extractData(workbook) {
-        if (!workbook || !workbook.SheetNames) return [];
-        let sheetName = workbook.SheetNames.find(s => s.toLowerCase().includes('order payments')) || workbook.SheetNames[0];
+        let sheetName = workbook.SheetNames.find(s => s.toLowerCase().includes('order')) || workbook.SheetNames[0];
         return XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
     }
 
-    function processFile(e, type) {
+    function processFile(e) {
         const reader = new FileReader();
         reader.onload = (event) => {
             const workbook = XLSX.read(new Uint8Array(event.target.result), {type: 'array'});
@@ -121,74 +141,71 @@
             json.forEach(row => {
                 let keys = Object.keys(row);
                 let oidKey = keys.find(k => k.toLowerCase().replace(/[^a-z]/g,'').includes('suborderno') || k.toLowerCase().includes('order id'));
-                let settlementKey = keys.find(k => k.toLowerCase().includes('final settlement amount') || k.toLowerCase().includes('b+c+g+h'));
+                let stateKey = keys.find(k => k.toLowerCase().includes('customer state'));
+                let priceKey = keys.find(k => k.includes('Supplier Discounted Price (Incl GST and Commision)'));
+                if (!priceKey) priceKey = keys.find(k => k.toLowerCase().includes('final settlement amount') || k.toLowerCase().includes('b+c+g+h'));
+                
+                let skuKey = keys.find(k => k.toLowerCase().includes('sku'));
+                let creditReasonKey = keys.find(k => k.toLowerCase().includes('reason for credit entry'));
+                
                 let oid = row[oidKey];
-                let settlementVal = parseFloat(row[settlementKey] || 0);
-
                 if (oid) {
                     let cleanId = String(oid).trim();
-                    if (type === 'order') {
-                        if (!masterData[cleanId]) {
-                            masterData[cleanId] = {
-                                id: cleanId,
-                                date: formatExcelDate(row[keys.find(k => k.toLowerCase().includes('date'))]),
-                                sku: row[keys.find(k => k.toLowerCase().includes('sku'))] || 'Unknown',
-                                price: settlementVal || parseFloat(row[keys.find(k => k.toLowerCase().includes('price') || k.toLowerCase().includes('supplier discounted'))] || 0),
-                                charge: 0, notes: '', isPaid: false
-                            };
-                            updateCount++;
-                        }
-                    } else if (type === 'payment') {
-                        if (masterData[cleanId]) {
-                            masterData[cleanId].isPaid = true;
-                            if (settlementVal !== 0) masterData[cleanId].price = settlementVal;
-                            updateCount++;
-                        }
-                    }
+                    masterData[cleanId] = {
+                        id: cleanId,
+                        date: formatExcelDate(row[keys.find(k => k.toLowerCase().includes('date'))]),
+                        sku: row[skuKey] || 'Unknown',
+                        state: row[stateKey] || 'N/A',
+                        price: parseFloat(row[priceKey]) || 0,
+                        creditReason: row[creditReasonKey] || 'Pending',
+                        charge: masterData[cleanId]?.charge || 0,
+                        notes: masterData[cleanId]?.notes || ''
+                    };
+                    updateCount++;
                 }
             });
-            alert(`${updateCount} entries process ho gayi hain.`);
             saveAndRefresh();
+            alert(`${updateCount} entries process ho gayi hain.`);
         };
         reader.readAsArrayBuffer(e.target.files[0]);
     }
 
-    document.getElementById('orderFile').addEventListener('change', (e) => processFile(e, 'order'));
-    document.getElementById('paymentFile').addEventListener('change', (e) => processFile(e, 'payment'));
+    document.getElementById('orderFile').addEventListener('change', processFile);
+
+    function getStatusClass(reason) {
+        let r = String(reason).toLowerCase();
+        if (r.includes('delivered')) return 'st-delivered';
+        if (r.includes('shipped')) return 'st-shipped';
+        if (r.includes('cancelled') || r.includes('return')) return 'st-cancelled';
+        return 'st-default';
+    }
 
     function saveAndRefresh() {
         localStorage.setItem('meeshoData', JSON.stringify(masterData));
         renderAll();
     }
 
-    // --- SORTING LOGIC ---
-    function sortSKU(key) {
-        if (skuSortConfig.key === key) skuSortConfig.asc = !skuSortConfig.asc;
-        else { skuSortConfig.key = key; skuSortConfig.asc = false; }
-        renderSKUAnalytics();
-    }
-
-    function sortOrders(key) {
-        if (orderSortConfig.key === key) orderSortConfig.asc = !orderSortConfig.asc;
-        else { orderSortConfig.key = key; orderSortConfig.asc = false; }
-        renderOrderTable();
-    }
-
     function renderAll() {
         renderOrderTable();
         renderSKUAnalytics();
         renderPackingConfig();
+        updateCharts();
         toggleDeleteButton();
     }
 
     function renderOrderTable() {
         const tbody = document.getElementById('tableBody');
+        const tfoot = document.getElementById('orderTableFooter');
         tbody.innerHTML = '';
         let entries = Object.values(masterData);
+        
+        let tOrders = entries.length;
+        let tAmount = 0;
+        let tFine = 0;
 
         entries.sort((a, b) => {
-            let valA = a[orderSortConfig.key];
-            let valB = b[orderSortConfig.key];
+            let valA = a[orderSortConfig.key] || '';
+            let valB = b[orderSortConfig.key] || '';
             if (orderSortConfig.key === 'date') {
                 valA = a.date.split('-').reverse().join('');
                 valB = b.date.split('-').reverse().join('');
@@ -197,20 +214,29 @@
         });
 
         entries.forEach(item => {
-            let actualBank = item.price - item.charge;
+            tAmount += item.price;
+            tFine += item.charge;
             tbody.innerHTML += `
                 <tr>
                     <td><input type="checkbox" class="order-checkbox" value="${item.id}" onclick="toggleDeleteButton()"></td>
                     <td>${item.date}</td>
                     <td>${item.id}</td>
                     <td><strong>${item.sku}</strong></td>
+                    <td>${item.state}</td>
                     <td>₹${item.price.toFixed(2)}</td>
                     <td><input type="number" style="width:70px" value="${item.charge}" onchange="updateField('${item.id}', 'charge', this.value)"></td>
-                    <td class="${actualBank >= 0 ? 'profit' : 'loss'}">₹${actualBank.toFixed(2)}</td>
-                    <td>${item.isPaid ? '<span class="paid-tag">PAID</span>' : '<span class="pending-tag">PENDING</span>'}</td>
+                    <td><span class="status-tag ${getStatusClass(item.creditReason)}">${item.creditReason}</span></td>
                     <td><input type="text" style="width:120px" value="${item.notes || ''}" onchange="updateField('${item.id}', 'notes', this.value)"></td>
                 </tr>`;
         });
+
+        tfoot.innerHTML = `
+            <tr class="order-log-footer">
+                <td colspan="5" style="text-align:right">LOG TOTALS:</td>
+                <td>₹${tAmount.toFixed(2)}</td>
+                <td>₹${tFine.toFixed(2)}</td>
+                <td colspan="2">Total Orders: ${tOrders}</td>
+            </tr>`;
     }
 
     function renderSKUAnalytics() {
@@ -240,6 +266,58 @@
             sBody.innerHTML += `<tr><td><strong>${d.sku}</strong></td><td>${d.count}</td><td>₹${d.gross.toFixed(2)}</td><td class="loss">₹${d.returns.toFixed(2)}</td><td>₹${d.packing.toFixed(2)}</td><td class="${d.net >= 0 ? 'profit' : 'loss'}">₹${d.net.toFixed(2)}</td></tr>`;
         });
         document.getElementById('skuFooter').innerHTML = `<tr class="total-row-sku"><td>GRAND TOTAL</td><td>${gOrders}</td><td>₹${gSales.toFixed(2)}</td><td>₹${gReturns.toFixed(2)}</td><td>₹${gPacking.toFixed(2)}</td><td>₹${gNet.toFixed(2)}</td></tr>`;
+        
+        if(sortedSKUs.length > 0) {
+            let topS = [...sortedSKUs].sort((a,b)=> b.count - a.count)[0];
+            document.getElementById('highSKU').innerText = topS.sku + " (" + topS.count + ")";
+        }
+    }
+
+    function updateCharts() {
+        const states = {};
+        const skus = {};
+        Object.values(masterData).forEach(item => {
+            if(item.state && item.state !== 'N/A') states[item.state] = (states[item.state] || 0) + 1;
+            skus[item.sku] = (skus[item.sku] || 0) + 1;
+        });
+
+        let topState = Object.keys(states).reduce((a, b) => states[a] > states[b] ? a : b, "-");
+        document.getElementById('highState').innerText = topState + " (" + (states[topState] || 0) + ")";
+
+        // State Chart
+        if (stateChartObj) stateChartObj.destroy();
+        stateChartObj = new Chart(document.getElementById('stateChart'), {
+            type: 'bar',
+            data: {
+                labels: Object.keys(states),
+                datasets: [{ label: 'Orders', data: Object.values(states), backgroundColor: '#3498db' }]
+            },
+            options: { responsive: true, plugins: { legend: { display: false } } }
+        });
+
+        // SKU Chart (Now Horizontal Bar Chart for better visibility)
+        if (skuChartObj) skuChartObj.destroy();
+        let sortedSKUEntries = Object.entries(skus).sort((a,b) => b[1] - a[1]);
+        skuChartObj = new Chart(document.getElementById('skuChart'), {
+            type: 'bar',
+            data: {
+                labels: sortedSKUEntries.map(e => e[0]),
+                datasets: [{ 
+                    label: 'Orders', 
+                    data: sortedSKUEntries.map(e => e[1]), 
+                    backgroundColor: '#9b59b6' 
+                }]
+            },
+            options: { 
+                indexAxis: 'y', // Makes it horizontal
+                responsive: true, 
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { beginAtZero: true, grid: { display: false } },
+                    y: { grid: { display: false } }
+                }
+            }
+        });
     }
 
     function renderPackingConfig() {
@@ -264,6 +342,18 @@
         packingCosts[sku] = parseFloat(val || 0);
         localStorage.setItem('packingCosts', JSON.stringify(packingCosts));
         renderAll();
+    }
+
+    function sortSKU(key) {
+        skuSortConfig.asc = skuSortConfig.key === key ? !skuSortConfig.asc : false;
+        skuSortConfig.key = key;
+        renderSKUAnalytics();
+    }
+
+    function sortOrders(key) {
+        orderSortConfig.asc = orderSortConfig.key === key ? !orderSortConfig.asc : false;
+        orderSortConfig.key = key;
+        renderOrderTable();
     }
 
     function backupData() {
@@ -304,11 +394,14 @@
     function clearAllData() { if(confirm("Clear All?")) { localStorage.clear(); location.reload(); } }
 
     function exportToExcel() {
-        const wsData = Object.values(masterData).map(item => ({ "Date": item.date, "ID": item.id, "SKU": item.sku, "Settlement": item.price, "Fine": item.charge, "Paid": item.isPaid ? 'YES' : 'NO' }));
+        const wsData = Object.values(masterData).map(item => ({ 
+            "Date": item.date, "ID": item.id, "SKU": item.sku, "State": item.state, 
+            "Settlement": item.price, "Fine": item.charge, "Status": item.creditReason 
+        }));
         const ws = XLSX.utils.json_to_sheet(wsData);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Report");
-        XLSX.writeFile(wb, "Meesho_Data.xlsx");
+        XLSX.writeFile(wb, "Meesho_Detailed_Report.xlsx");
     }
 </script>
 
