@@ -2,14 +2,14 @@
 <html lang="hi">
 <head>
     <meta charset="UTF-8">
-    <title>Meesho Tracker - Smart Backup</title>
+    <title>Meesho Tracker - Settlement Pro</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; padding: 20px; margin: 0; }
         .container { max-width: 1500px; margin: auto; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
         h2, h3 { color: #811e68; text-align: center; border-bottom: 2px solid #811e68; padding-bottom: 10px; margin-top: 30px; }
-        .top-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+        .top-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px; }
         .box { background: #fff5fd; padding: 15px; border-radius: 10px; border: 1px solid #eecce6; }
         .highlight-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
         .h-box { padding: 20px; border-radius: 10px; text-align: center; color: white; font-weight: bold; }
@@ -25,11 +25,16 @@
         th { background: #811e68; color: white; cursor: pointer; position: sticky; top: 0; user-select: none; }
         tr:nth-child(even) { background: #fafafa; }
         
+        /* Status Tags */
         .status-tag { padding: 4px 10px; border-radius: 4px; font-weight: bold; font-size: 11px; color: white; }
         .st-delivered { background: #000000; }
         .st-shipped { background: #27ae60; }
         .st-cancelled { background: #e74c3c; }
+        .st-paid { background: #1e3799; } /* Blue for Settled */
         .st-default { background: #95a5a6; }
+
+        /* Strike-through effect for Paid Orders */
+        .strike-id { text-decoration: line-through; color: #7f8c8d; opacity: 0.7; font-weight: normal; }
 
         .profit { color: #27ae60; font-weight: bold; } .loss { color: #e74c3c; font-weight: bold; }
         .total-row-sku { background: #2d3436; color: white; font-weight: bold; }
@@ -39,7 +44,7 @@
 <body>
 
 <div class="container">
-    <h2>Meesho Business Tracker (Pro Analytics)</h2>
+    <h2>Meesho Business Tracker (Settlement Pro)</h2>
 
     <div class="highlight-grid">
         <div class="h-box top-state">TOP STATE: <span id="highState">-</span></div>
@@ -54,6 +59,10 @@
         <div class="box">
             <strong>Step 2: SKU Packing Cost</strong>
             <div id="skuListConfig" style="max-height: 100px; overflow-y: auto; margin-top:10px; font-size: 12px;">Waiting...</div>
+        </div>
+        <div class="box" style="background: #e8f8f5; border-color: #2ecc71;">
+            <strong>Step 3: Upload Payment File (CSV)</strong><br><br>
+            <input type="file" id="paymentFile" accept=".csv, .xlsx">
         </div>
     </div>
 
@@ -97,7 +106,8 @@
                     <th onclick="sortOrders('id')">Sub Order ID ↕️</th>
                     <th>SKU</th>
                     <th>Customer State</th>
-                    <th>Settlement Amt</th>
+                    <th>Sale Price</th>
+                    <th>Final Settlement Amt</th>
                     <th>Manual Fine</th>
                     <th>Reason for Credit Entry</th>
                     <th>Notes</th>
@@ -127,11 +137,15 @@
     }
 
     function extractData(workbook) {
-        let sheetName = workbook.SheetNames.find(s => s.toLowerCase().includes('order')) || workbook.SheetNames[0];
+        // Automatically check for 'Order' or 'Order Payments' sheets
+        let sheetName = workbook.SheetNames.find(s => s.toLowerCase().includes('order payments')) || 
+                        workbook.SheetNames.find(s => s.toLowerCase().includes('order')) || 
+                        workbook.SheetNames[0];
         return XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
     }
 
-    function processFile(e) {
+    // Processing Step 1: Order File
+    function processOrderFile(e) {
         const reader = new FileReader();
         reader.onload = (event) => {
             const workbook = XLSX.read(new Uint8Array(event.target.result), {type: 'array'});
@@ -142,38 +156,70 @@
                 let keys = Object.keys(row);
                 let oidKey = keys.find(k => k.toLowerCase().replace(/[^a-z]/g,'').includes('suborderno') || k.toLowerCase().includes('order id'));
                 let stateKey = keys.find(k => k.toLowerCase().includes('customer state'));
-                let priceKey = keys.find(k => k.includes('Supplier Discounted Price (Incl GST and Commision)'));
-                if (!priceKey) priceKey = keys.find(k => k.toLowerCase().includes('final settlement amount') || k.toLowerCase().includes('b+c+g+h'));
-                
-                let skuKey = keys.find(k => k.toLowerCase().includes('sku'));
-                let creditReasonKey = keys.find(k => k.toLowerCase().includes('reason for credit entry'));
+                let priceKey = keys.find(k => k.includes('Supplier Discounted Price'));
                 
                 let oid = row[oidKey];
                 if (oid) {
                     let cleanId = String(oid).trim();
-                    masterData[cleanId] = {
-                        id: cleanId,
-                        date: formatExcelDate(row[keys.find(k => k.toLowerCase().includes('date'))]),
-                        sku: row[skuKey] || 'Unknown',
-                        state: row[stateKey] || 'N/A',
-                        price: parseFloat(row[priceKey]) || 0,
-                        creditReason: row[creditReasonKey] || 'Pending',
-                        charge: masterData[cleanId]?.charge || 0,
-                        notes: masterData[cleanId]?.notes || ''
-                    };
-                    updateCount++;
+                    if (!masterData[cleanId]) {
+                        masterData[cleanId] = {
+                            id: cleanId,
+                            date: formatExcelDate(row[keys.find(k => k.toLowerCase().includes('date'))]),
+                            sku: row[keys.find(k => k.toLowerCase().includes('sku'))] || 'Unknown',
+                            state: row[stateKey] || 'N/A',
+                            price: parseFloat(row[priceKey]) || 0,
+                            settlementAmt: 0,
+                            creditReason: row[keys.find(k => k.toLowerCase().includes('reason'))] || 'Pending',
+                            charge: 0,
+                            notes: '',
+                            isSettled: false
+                        };
+                        updateCount++;
+                    }
                 }
             });
             saveAndRefresh();
-            alert(`${updateCount} entries process ho gayi hain.`);
+            alert(`${updateCount} new orders added.`);
         };
         reader.readAsArrayBuffer(e.target.files[0]);
     }
 
-    document.getElementById('orderFile').addEventListener('change', processFile);
+    // Processing Step 3: Payment/Settlement File
+    function processPaymentFile(e) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const workbook = XLSX.read(new Uint8Array(event.target.result), {type: 'array'});
+            const json = extractData(workbook);
+            let updateCount = 0;
 
-    function getStatusClass(reason) {
-        let r = String(reason).toLowerCase();
+            json.forEach(row => {
+                let keys = Object.keys(row);
+                let oidKey = keys.find(k => k.toLowerCase().replace(/[^a-z]/g,'').includes('suborderno') || k.toLowerCase().includes('order id'));
+                let settlementKey = keys.find(k => k.toLowerCase().includes('final settlement amount') || k.toLowerCase().includes('b+c+g+h'));
+                
+                let oid = row[oidKey];
+                if (oid) {
+                    let cleanId = String(oid).trim();
+                    if (masterData[cleanId]) {
+                        masterData[cleanId].settlementAmt = parseFloat(row[settlementKey]) || 0;
+                        masterData[cleanId].isSettled = true;
+                        masterData[cleanId].creditReason = "Paid/Settled";
+                        updateCount++;
+                    }
+                }
+            });
+            saveAndRefresh();
+            alert(`${updateCount} orders updated with settlement data.`);
+        };
+        reader.readAsArrayBuffer(e.target.files[0]);
+    }
+
+    document.getElementById('orderFile').addEventListener('change', processOrderFile);
+    document.getElementById('paymentFile').addEventListener('change', processPaymentFile);
+
+    function getStatusClass(item) {
+        if (item.isSettled) return 'st-paid';
+        let r = String(item.creditReason).toLowerCase();
         if (r.includes('delivered')) return 'st-delivered';
         if (r.includes('shipped')) return 'st-shipped';
         if (r.includes('cancelled') || r.includes('return')) return 'st-cancelled';
@@ -200,8 +246,7 @@
         let entries = Object.values(masterData);
         
         let tOrders = entries.length;
-        let tAmount = 0;
-        let tFine = 0;
+        let tSale = 0, tSettled = 0, tFine = 0;
 
         entries.sort((a, b) => {
             let valA = a[orderSortConfig.key] || '';
@@ -214,18 +259,24 @@
         });
 
         entries.forEach(item => {
-            tAmount += item.price;
+            tSale += item.price;
+            tSettled += item.settlementAmt;
             tFine += item.charge;
+            
+            // Apply Strike-through if settled
+            let strikeClass = item.isSettled ? 'strike-id' : '';
+
             tbody.innerHTML += `
                 <tr>
                     <td><input type="checkbox" class="order-checkbox" value="${item.id}" onclick="toggleDeleteButton()"></td>
                     <td>${item.date}</td>
-                    <td>${item.id}</td>
+                    <td class="${strikeClass}">${item.id}</td>
                     <td><strong>${item.sku}</strong></td>
                     <td>${item.state}</td>
                     <td>₹${item.price.toFixed(2)}</td>
+                    <td class="profit">₹${(item.settlementAmt || 0).toFixed(2)}</td>
                     <td><input type="number" style="width:70px" value="${item.charge}" onchange="updateField('${item.id}', 'charge', this.value)"></td>
-                    <td><span class="status-tag ${getStatusClass(item.creditReason)}">${item.creditReason}</span></td>
+                    <td><span class="status-tag ${getStatusClass(item)}">${item.creditReason}</span></td>
                     <td><input type="text" style="width:120px" value="${item.notes || ''}" onchange="updateField('${item.id}', 'notes', this.value)"></td>
                 </tr>`;
         });
@@ -233,9 +284,10 @@
         tfoot.innerHTML = `
             <tr class="order-log-footer">
                 <td colspan="5" style="text-align:right">LOG TOTALS:</td>
-                <td>₹${tAmount.toFixed(2)}</td>
+                <td>₹${tSale.toFixed(2)}</td>
+                <td>₹${tSettled.toFixed(2)}</td>
                 <td>₹${tFine.toFixed(2)}</td>
-                <td colspan="2">Total Orders: ${tOrders}</td>
+                <td colspan="2">Orders: ${tOrders}</td>
             </tr>`;
     }
 
@@ -246,19 +298,17 @@
             if (!skuData[item.sku]) skuData[item.sku] = { sku: item.sku, count: 0, gross: 0, returns: 0, packing: 0, net: 0 };
             let pCost = packingCosts[item.sku] || 0;
             skuData[item.sku].count++;
-            skuData[item.sku].gross += item.price;
+            
+            // Use settlement amount if available, otherwise use sale price
+            let finalAmt = item.isSettled ? item.settlementAmt : item.price;
+            
+            skuData[item.sku].gross += finalAmt;
             skuData[item.sku].returns += item.charge;
             skuData[item.sku].packing += pCost;
-            skuData[item.sku].net += (item.price - item.charge - pCost);
+            skuData[item.sku].net += (finalAmt - item.charge - pCost);
         });
 
-        let sortedSKUs = Object.values(skuData);
-        sortedSKUs.sort((a, b) => {
-            let valA = a[skuSortConfig.key];
-            let valB = b[skuSortConfig.key];
-            return skuSortConfig.asc ? (valA > valB ? 1 : -1) : (valA < valB ? 1 : -1);
-        });
-
+        let sortedSKUs = Object.values(skuData).sort((a,b) => b.count - a.count);
         const sBody = document.getElementById('skuBody');
         sBody.innerHTML = '';
         sortedSKUs.forEach(d => {
@@ -267,10 +317,7 @@
         });
         document.getElementById('skuFooter').innerHTML = `<tr class="total-row-sku"><td>GRAND TOTAL</td><td>${gOrders}</td><td>₹${gSales.toFixed(2)}</td><td>₹${gReturns.toFixed(2)}</td><td>₹${gPacking.toFixed(2)}</td><td>₹${gNet.toFixed(2)}</td></tr>`;
         
-        if(sortedSKUs.length > 0) {
-            let topS = [...sortedSKUs].sort((a,b)=> b.count - a.count)[0];
-            document.getElementById('highSKU').innerText = topS.sku + " (" + topS.count + ")";
-        }
+        if(sortedSKUs.length > 0) document.getElementById('highSKU').innerText = sortedSKUs[0].sku + " (" + sortedSKUs[0].count + ")";
     }
 
     function updateCharts() {
@@ -287,10 +334,7 @@
         if (stateChartObj) stateChartObj.destroy();
         stateChartObj = new Chart(document.getElementById('stateChart'), {
             type: 'bar',
-            data: {
-                labels: Object.keys(states),
-                datasets: [{ label: 'Orders', data: Object.values(states), backgroundColor: '#3498db' }]
-            },
+            data: { labels: Object.keys(states), datasets: [{ label: 'Orders', data: Object.values(states), backgroundColor: '#3498db' }] },
             options: { responsive: true, plugins: { legend: { display: false } } }
         });
 
@@ -298,29 +342,17 @@
         let sortedSKUEntries = Object.entries(skus).sort((a,b) => b[1] - a[1]);
         skuChartObj = new Chart(document.getElementById('skuChart'), {
             type: 'bar',
-            data: {
-                labels: sortedSKUEntries.map(e => e[0]),
-                datasets: [{ label: 'Orders', data: sortedSKUEntries.map(e => e[1]), backgroundColor: '#9b59b6' }]
-            },
-            options: { 
-                indexAxis: 'y', 
-                responsive: true, 
-                plugins: { legend: { display: false } },
-                scales: { x: { beginAtZero: true }, y: { ticks: { autoSkip: false } } }
-            }
+            data: { labels: sortedSKUEntries.map(e => e[0]), datasets: [{ label: 'Orders', data: sortedSKUEntries.map(e => e[1]), backgroundColor: '#9b59b6' }] },
+            options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } } }
         });
     }
 
     function renderPackingConfig() {
         const config = document.getElementById('skuListConfig');
         const skus = [...new Set(Object.values(masterData).map(i => i.sku))];
-        if(!skus.length) return;
         config.innerHTML = '';
         skus.forEach(sku => {
-            config.innerHTML += `<div style="display:flex; justify-content:space-between; padding:5px; border-bottom:1px solid #eee;">
-                <span>${sku}</span>
-                <input type="number" style="width:60px" value="${packingCosts[sku] || 0}" onchange="updatePackingCost('${sku}', this.value)">
-            </div>`;
+            config.innerHTML += `<div style="display:flex; justify-content:space-between; padding:5px; border-bottom:1px solid #eee;"><span>${sku}</span><input type="number" style="width:60px" value="${packingCosts[sku] || 0}" onchange="updatePackingCost('${sku}', this.value)"></div>`;
         });
     }
 
@@ -348,18 +380,11 @@
     }
 
     function backupData() {
-        // Current Date formatting (DD-MM-YYYY)
         const now = new Date();
-        const day = String(now.getDate()).padStart(2, '0');
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const year = now.getFullYear();
-        const formattedDate = `${day}-${month}-${year}`;
-
+        const formattedDate = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
         const blob = new Blob([JSON.stringify({masterData, packingCosts})], { type: "application/json" });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        
-        // Dynamic file name
         link.download = `MeeshoBackup${formattedDate}.json`;
         link.click();
     }
@@ -396,7 +421,7 @@
     function exportToExcel() {
         const wsData = Object.values(masterData).map(item => ({ 
             "Date": item.date, "ID": item.id, "SKU": item.sku, "State": item.state, 
-            "Settlement": item.price, "Fine": item.charge, "Status": item.creditReason 
+            "Sale Price": item.price, "Settlement Amt": item.settlementAmt, "Fine": item.charge, "Status": item.creditReason 
         }));
         const ws = XLSX.utils.json_to_sheet(wsData);
         const wb = XLSX.utils.book_new();
